@@ -35,20 +35,31 @@ if (firstRun < 0) throw new Error('Geen __r( entry gevonden');
 lines.splice(firstRun, 0, ...moduleSrc.split('\n'));
 src = lines.join('\n');
 
-// 2. Tab toevoegen aan de tab-navigator (module 452).
-const TAB_DEPS_OLD = '},452,[36,266,453,500,518,530,147]);';
-const TAB_DEPS_NEW = `},452,[36,266,453,500,518,530,147,${MODULE_ID}]);`;
-if (!src.includes(TAB_DEPS_NEW)) {
-  if (!src.includes(TAB_DEPS_OLD)) throw new Error('Tab-navigator (module 452) niet gevonden');
-  const SETTINGS = '(0,s.jsx)(u.Screen,{name:"Settings"';
-  const TAB = '(0,s.jsx)(u.Screen,{name:"Challenge",component:e(r(d[7])).default,options:{title:\'90 dagen\',tabBarIcon:({color:e})=>(0,s.jsx)(t.default,{style:{fontSize:20,color:e},children:"\\ud83c\\udfaf"})}}),';
-  const idx = src.indexOf(SETTINGS);
-  if (idx < 0) throw new Error('Settings-tab niet gevonden');
-  src = src.slice(0, idx) + TAB + src.slice(idx);
-  src = src.replace(TAB_DEPS_OLD, TAB_DEPS_NEW);
+// 2. Eerdere versie met een eigen tabblad terugdraaien: de tab-navigator (module 452) blijft origineel.
+const TAB_DEPS_ORIG = '},452,[36,266,453,500,518,530,147]);';
+const TAB_DEPS_PATCHED = `},452,[36,266,453,500,518,530,147,${MODULE_ID}]);`;
+const TAB = '(0,s.jsx)(u.Screen,{name:"Challenge",component:e(r(d[7])).default,options:{title:\'90 dagen\',tabBarIcon:({color:e})=>(0,s.jsx)(t.default,{style:{fontSize:20,color:e},children:"\\ud83c\\udfaf"})}}),';
+src = src.replace(TAB, '').replace(TAB_DEPS_PATCHED, TAB_DEPS_ORIG);
+
+// 3. Challenge als los scherm in de root-stack (module 313), naast EntryDetail; met terugknop in de header.
+const STACK_DEPS_OLD = '},313,[36,314,452,675,517,147]);';
+const STACK_DEPS_NEW = `},313,[36,314,452,675,517,147,${MODULE_ID}]);`;
+if (!src.includes(STACK_DEPS_NEW)) {
+  const END_STACK = ']})}},313,[';
+  if (!src.includes(STACK_DEPS_OLD) || src.split(END_STACK).length !== 2) throw new Error('Root-stack (module 313) niet gevonden');
+  const SCREEN = `,(0,c.jsx)(s.Screen,{name:"Challenge",component:e(r(d[6])).default,options:{title:'90 dagen challenge'}})`;
+  src = src.replace(END_STACK, SCREEN + END_STACK).replace(STACK_DEPS_OLD, STACK_DEPS_NEW);
 }
 
-// 3. Wegschrijven onder een nieuwe hash-naam en index.html bijwerken (cache-busting).
+// 4. Knop bovenaan het Vandaag-scherm (module 500); het formulier eronder blijft ongewijzigd.
+const TODAY_OLD = 'function f(){return(0,l.jsx)(t.default,{style:o.flex,children:(0,l.jsx)(n.default,{})})}const o=u.default.create({flex:{flex:1,backgroundColor:\'#F9FAFB\'}})},500,[36,501,44,502,147]);';
+const TODAY_NEW = `function f(){return(0,l.jsxs)(t.default,{style:o.flex,children:[(0,l.jsx)(r(d[5]).ChallengeButton,{}),(0,l.jsx)(n.default,{})]})}const o=u.default.create({flex:{flex:1,backgroundColor:'#F9FAFB'}})},500,[36,501,44,502,147,${MODULE_ID}]);`;
+if (!src.includes(TODAY_NEW)) {
+  if (!src.includes(TODAY_OLD)) throw new Error('Vandaag-scherm (module 500) niet gevonden');
+  src = src.replace(TODAY_OLD, TODAY_NEW);
+}
+
+// 5. Wegschrijven onder een nieuwe hash-naam en index.html bijwerken (cache-busting).
 const hash = createHash('md5').update(src).digest('hex');
 const newName = `index-${hash}.js`;
 writeFileSync(join(jsDir, newName), src);

@@ -7,6 +7,7 @@
 "use strict";
 Object.defineProperty(_e, '__esModule', { value: true });
 Object.defineProperty(_e, 'default', { enumerable: true, get: function () { return ChallengeScreen; } });
+Object.defineProperty(_e, 'ChallengeButton', { enumerable: true, get: function () { return ChallengeButton; } });
 
 const def = (x) => (x && x.__esModule ? x.default : x);
 const React = r(d[0]);
@@ -486,6 +487,31 @@ function ChallengeScreen() {
         h(Btn, { label: 'Sluiten', kind: 'ghost', onPress: () => setTextModal(null) }))) : null);
 }
 
+// ---- Knop op het Vandaag-scherm --------------------------------------------
+// Optionele ingang naar de challenge; het Rate My Day-formulier zelf blijft ongewijzigd.
+function ChallengeButton() {
+  const navigation = nav.useNavigation();
+  const [sub, setSub] = useState('Optioneel · gewoonten afvinken en weekanalyse');
+  nav.useFocusEffect(useCallback(() => {
+    loadChallenge().then((ch) => {
+      if (!ch.startDate) return;
+      const t = dates.todayKey();
+      if (t < ch.startDate) setSub(`Start ${dates.formatDateShortNL(ch.startDate)}`);
+      else if (t > lastDay(ch)) setSub('Afgerond · bekijk je resultaten');
+      else {
+        const rec = ch.days[t];
+        setSub(`Dag ${dayNo(ch, t)} van ${TOTAL_DAYS}${rec && Object.keys(rec).length ? ' · vandaag bijgewerkt' : ''}`);
+      }
+    });
+  }, []));
+  return h(Touchable, { style: S.entry, onPress: () => navigation.navigate('Challenge'), activeOpacity: 0.7 },
+    h(Text, { style: S.entryIcon }, '🎯'),
+    h(View, { style: { flex: 1 } },
+      h(Text, { style: S.entryTitle }, '90 dagen challenge'),
+      h(Text, { style: S.entrySub }, sub)),
+    h(Text, { style: S.entryArrow }, '›'));
+}
+
 // ---- Eerste keer: challenge instellen -------------------------------------
 function Setup({ c, update, today }) {
   const [start, setStart] = useState(mondayOf(today));
@@ -892,6 +918,11 @@ function AnalyseView({ c, entries, n, setN, today, banner, setTextModal }) {
 
 // ---------------------------------------------------------------------------
 const S = StyleSheet.create({
+  entry: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 14, marginBottom: 2, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#EEF2FF', borderRadius: 12, borderWidth: 1, borderColor: '#C7D2FE' },
+  entryIcon: { fontSize: 20, marginRight: 10 },
+  entryTitle: { fontSize: 15, fontWeight: '700', color: '#312E81' },
+  entrySub: { fontSize: 12, color: '#6366F1', marginTop: 1 },
+  entryArrow: { fontSize: 24, color: '#4F46E5', fontWeight: '700', marginLeft: 8 },
   flex: { flex: 1, backgroundColor: '#F9FAFB' },
   content: { padding: 16, paddingBottom: 60 },
   h1: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 6 },
