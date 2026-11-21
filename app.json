@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "rate-my-day",
+    "name": "Rate My Day",
     "slug": "rate-my-day",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,19 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Rate My Day",
+      "shortName": "Rate My Day",
+      "themeColor": "#6C4CF5",
+      "backgroundColor": "#F4F2FA",
+      "lang": "nl"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "baseUrl": "/rate-my-day"
     }
   }
 }
