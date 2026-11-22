@@ -76,7 +76,7 @@ def num(x):
         return None
 
 
-def dagrijen(velden: dict, gezondheid: dict) -> dict[str, dict]:
+def dagrijen(velden: dict, gezondheid: dict, labels: dict | None = None) -> dict[str, dict]:
     """Per datum alle kenmerken naast elkaar: dagcijfer, slaap, drinken, sport, wandelen, challenge-gewoonten."""
     entries = velden.get("entries") or {}
     ch_days = ((velden.get("challenge") or {}).get("days")) or {}
@@ -116,8 +116,47 @@ def dagrijen(velden: dict, gezondheid: dict) -> dict[str, dict]:
                 r[k_uit] = c[k_in]
         if c.get("sugar") in ("none", "little", "much"):
             r["geen_suiker"] = c["sugar"] == "none"
+        if labels is not None and (e.get("note") or "").strip():
+            r["labels"] = (labels.get(dag) or {}).get("labels", [])
         rijen[dag] = r
     return rijen
+
+
+LABELS = {  # sleutel: omschrijving voor Claude
+    "gedronken": "alcohol gedronken (bier, wijn, borrel, feest met drank)",
+    "kater": "kater of brak door drank/uitgaan van de avond ervoor",
+    "gesport": "gesport of getraind (gym, hardlopen, boksen, kickboksen, padel, enz.)",
+    "gewandeld": "gewandeld of flink gelopen",
+    "mensen_gezien": "tijd met vrienden, familie of date doorgebracht (sociaal, niet alleen werkcontact)",
+    "kinderen": "tijd met zijn kinderen",
+    "gefocust_gewerkt": "gefocust of productief gewerkt, diep werk, veel afgekregen",
+    "lang_gewerkt": "heel lang of tot laat gewerkt",
+    "slecht_geslapen": "slecht of te kort geslapen, moe",
+    "ziek": "ziek of lichamelijk niet fit",
+    "gedoe_werk": "stress, gedoe of tegenslag op het werk",
+}
+
+LABEL_SYSTEEM = """Je labelt dagboeknotities van Stijn. Geef per datum de lijst met labels die duidelijk in de notitie staan.
+Alleen labelen wat er echt staat (of zeer duidelijk bedoeld is); bij twijfel niet. Labels:
+""" + "\n".join(f"- {k}: {v}" for k, v in LABELS.items()) + """
+Antwoord met alleen JSON: {"JJJJ-MM-DD": ["label", ...], ...} voor elke gegeven datum (lege lijst als niets past)."""
+
+
+def label_notities(velden: dict) -> tuple[dict, bool]:
+    """Labels per dag uit de notities; alleen nieuwe of gewijzigde notities gaan naar Claude. Geeft (labels, gewijzigd)."""
+    entries = velden.get("entries") or {}
+    cache = velden.get("notitieLabels") or {}
+    nieuw = {d: e["note"] for d, e in entries.items()
+             if (e.get("note") or "").strip() and (cache.get(d) or {}).get("bij") != e.get("updatedAt")}
+    gewijzigd = False
+    items = sorted(nieuw.items())
+    for i in range(0, len(items), 40):
+        blok = dict(items[i:i + 40])
+        uit = claude_json(LABEL_SYSTEEM, "Notities:\n" + json.dumps(blok, ensure_ascii=False), model="claude-haiku-5-5")
+        for d in blok:
+            cache[d] = {"labels": [l for l in (uit.get(d) or []) if l in LABELS], "bij": entries[d].get("updatedAt")}
+            gewijzigd = True
+    return cache, gewijzigd
 
 
 KENMERKEN = [  # (label, functie op rij -> True/False/None)
@@ -135,6 +174,11 @@ KENMERKEN = [  # (label, functie op rij -> True/False/None)
     ("Geen suiker", lambda r: r.get("geen_suiker")),
     ("Flexavond", lambda r: r.get("flexavond")),
     ("Werkdag (ma-vr)", lambda r: r["weekdag"] <= 5),
+] + [
+    (f"{naam} (volgens notitie)", (lambda k: lambda r: None if r.get("labels") is None else k in r["labels"])(k))
+    for k, naam in (("gedronken", "Gedronken"), ("kater", "Kater"), ("gesport", "Gesport"), ("gewandeld", "Gewandeld"),
+                    ("mensen_gezien", "Mensen gezien"), ("kinderen", "Tijd met kinderen"), ("gefocust_gewerkt", "Gefocust gewerkt"),
+                    ("lang_gewerkt", "Lang gewerkt"), ("slecht_geslapen", "Slecht geslapen"), ("ziek", "Ziek"), ("gedoe_werk", "Gedoe op werk"))
 ]
 
 
@@ -151,7 +195,8 @@ def patronen(rijen: list[dict]) -> list[dict]:
         niet = [r["score"] for r in met_score if f(r) is False]
         if len(wel) >= MIN_N and len(niet) >= MIN_N:
             uit.append({"label": label, "met": gem(wel), "zonder": gem(niet), "nMet": len(wel), "nZonder": len(niet)})
-    uit.sort(key=lambda p: -abs(p["met"] - p["zonder"]))
+    # sterkste verschil eerst, maar patronen met weinig dagen aan één kant zakken
+    uit.sort(key=lambda p: -abs(p["met"] - p["zonder"]) * min(1.0, min(p["nMet"], p["nZonder"]) / 6))
     return uit
 
 
@@ -159,8 +204,9 @@ def combinaties(rijen: list[dict]) -> list[dict]:
     """Twee gewoonten samen: alleen de opvallendste, met genoeg dagen."""
     met_score = [r for r in rijen if r.get("score") is not None]
     uit = []
-    for i, (la, fa) in enumerate(KENMERKEN[:8]):
-        for lb, fb in KENMERKEN[i + 1:8]:
+    sterk = [k for k in KENMERKEN if k[0] in {p["label"] for p in patronen(rijen)[:8]}]
+    for i, (la, fa) in enumerate(sterk):
+        for lb, fb in sterk[i + 1:]:
             beide = [r["score"] for r in met_score if fa(r) is True and fb(r) is True]
             geen = [r["score"] for r in met_score if fa(r) is False and fb(r) is False]
             if len(beide) >= MIN_N and len(geen) >= MIN_N:
@@ -172,6 +218,12 @@ def combinaties(rijen: list[dict]) -> list[dict]:
 def weekdagen(rijen: list[dict]) -> dict:
     namen = ["ma", "di", "wo", "do", "vr", "za", "zo"]
     return {namen[d - 1]: gem([r.get("score") for r in rijen if r["weekdag"] == d]) for d in range(1, 8)}
+
+
+def per_maand(rijen: list[dict]) -> dict:
+    maanden = sorted({r["dag"][:7] for r in rijen if r.get("score") is not None})
+    return {m: {"gem": gem([r.get("score") for r in rijen if r["dag"].startswith(m)]),
+                "dagen": sum(1 for r in rijen if r["dag"].startswith(m) and r.get("score") is not None)} for m in maanden}
 
 
 def maak_cijfers(rijen: dict, maandag: dt.date) -> dict:
@@ -190,14 +242,18 @@ def maak_cijfers(rijen: dict, maandag: dt.date) -> dict:
                  "gem_stappen": gem([r.get("stappen") for r in deze]),
                  "dagen": [{k: v for k, v in r.items() if k != "weekdag"} for r in deze]},
         "alle_tijd": {"dagen_met_cijfer": sum(1 for r in tot_nu if r.get("score") is not None), "gemiddeld_cijfer": gem([r.get("score") for r in tot_nu]),
-                      "patronen": patronen(tot_nu), "combinaties": combinaties(tot_nu), "per_weekdag": weekdagen(tot_nu)},
+                      "patronen": patronen(tot_nu), "combinaties": combinaties(tot_nu), "per_weekdag": weekdagen(tot_nu),
+                      "per_maand": per_maand(tot_nu),
+                      "beste_dagen": [{"dag": r["dag"], "score": r["score"], "labels": r.get("labels")} for r in sorted(tot_nu, key=lambda r: -(r.get("score") or 0))[:5]],
+                      "slechtste_dagen": [{"dag": r["dag"], "score": r["score"], "labels": r.get("labels")} for r in sorted(tot_nu, key=lambda r: (r.get("score") or 99))[:5]]},
         "deze_week_patronen": patronen(deze) if len(deze) >= 6 else [],
     }
 
 
 SYSTEEM = """Je bent de persoonlijke coach in Stijns dag-rater-app. Elke zondag krijg je de uitgerekende cijfers van zijn week en
 patronen over alle dagen (gemiddeld dagcijfer 1-10 met en zonder een gewoonte, met aantallen dagen). Stijn wil besefmomenten:
-patronen die hij zelf niet ziet, en een spiegel bij wat hij al vermoedt (sporten, gefocust werken en niet drinken lijken hem
+patronen die hij zelf niet ziet (ook in labels uit zijn notities: 'volgens notitie' betekent dat het in zijn
+dagnotitie stond; niet genoemd telt als 'niet', dus dat is een benadering), en een spiegel bij wat hij al vermoedt (sporten, gefocust werken en niet drinken lijken hem
 hogere cijfers te geven).
 
 Regels:
@@ -214,11 +270,10 @@ Antwoord met alleen JSON:
  "tip": "één concrete, kleine actie voor komende week die volgt uit de patronen"}"""
 
 
-def schrijf_tekst(cijfers: dict) -> dict:
-    proc = subprocess.run([CLAUDE_BIN, "-p", "--output-format", "json", "--model", MODEL, "--tools", "", "--system-prompt", SYSTEEM,
+def claude_json(systeem: str, invoer: str, model: str = MODEL) -> dict:
+    proc = subprocess.run([CLAUDE_BIN, "-p", "--output-format", "json", "--model", model, "--tools", "", "--system-prompt", systeem,
                            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'],
-                          input="Cijfers en patronen:\n" + json.dumps(cijfers, ensure_ascii=False), capture_output=True, text=True, timeout=600,
-                          cwd=str(Path(__file__).parent))
+                          input=invoer, capture_output=True, text=True, timeout=600, cwd=str(Path(__file__).parent))
     res = json.loads(proc.stdout or "{}")
     if proc.returncode or res.get("is_error"):
         raise RuntimeError(f"Claude-fout: {(res.get('result') or proc.stderr)[:300]}")
@@ -227,9 +282,17 @@ def schrijf_tekst(cijfers: dict) -> dict:
     return json.loads(m.group(0) if m else t)
 
 
+def schrijf_tekst(cijfers: dict, eerste: bool) -> dict:
+    extra = ("Dit is de EERSTE analyse: de besefmomenten gaan vooral over de patronen over alle dagen sinds het begin "
+             "(alle_tijd), niet over deze week. De kop en samenvatting gaan over het totaalbeeld sinds de eerste dag "
+             "(gemiddelde over alle dagen, verloop per maand); noem het aantal dagen van deze week niet. Mag 4 besefmomenten hebben.\n") if eerste else ""
+    return claude_json(SYSTEEM, extra + "Cijfers en patronen:\n" + json.dumps(cijfers, ensure_ascii=False))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--droog", action="store_true")
+    ap.add_argument("--totaal", action="store_true", help="totaalanalyse over alle dagen (opnieuw) maken")
     ap.add_argument("--week", help="maandag van de week (JJJJ-MM-DD); standaard de huidige week")
     a = ap.parse_args()
     vandaag = dt.date.today()
@@ -239,19 +302,29 @@ def main():
     for code, velden, gezondheid in lees_docs(tok):
         if code in uitsluiten:
             continue
-        rijen = dagrijen(velden, gezondheid)
+        labels, gewijzigd = label_notities(velden)
+        if gewijzigd and not a.droog:
+            api("PATCH", f"{BASE}/rmd/{code}?updateMask.fieldPaths=notitieLabels",
+                tok, {"fields": {"notitieLabels": {"stringValue": json.dumps(labels, ensure_ascii=False)}}})
+        rijen = dagrijen(velden, gezondheid, labels)
         if not any(r.get("score") is not None for r in rijen.values()):
             continue
         cijfers = maak_cijfers(rijen, maandag)
-        tekst = schrijf_tekst(cijfers)
+        eerste = a.totaal or not ((velden.get("inzichten") or {}).get("weken"))
+        tekst = schrijf_tekst(cijfers, eerste)
         jaar, wk, _ = maandag.isocalendar()
-        week = {"week": f"{jaar}-W{wk:02d}", "van": cijfers["week"]["van"], "tot": cijfers["week"]["tot"],
+        alle = cijfers["alle_tijd"]
+        eerste_dag = min(r["dag"] for r in rijen.values() if r.get("score") is not None)
+        week = {"week": f"{jaar}-W{wk:02d}" + ("-totaal" if eerste else ""), "soort": "totaal" if eerste else "week",
+                "van": eerste_dag if eerste else cijfers["week"]["van"], "tot": cijfers["week"]["tot"],
                 "gemaakt": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
                 "kop": tekst.get("kop", ""), "samenvatting": tekst.get("samenvatting", ""),
                 "besefmomenten": tekst.get("besefmomenten", [])[:4], "tip": tekst.get("tip", ""),
-                "cijfers": {"gem": cijfers["week"]["gemiddeld_cijfer"], "vorigeWeek": cijfers["week"]["vorige_week_gemiddeld"],
-                            "dagen": cijfers["week"]["dagen_ingevuld"]},
-                "patronen": cijfers["alle_tijd"]["patronen"][:6]}
+                "cijfers": ({"gem": alle["gemiddeld_cijfer"], "vorigeWeek": None, "dagen": alle["dagen_met_cijfer"]} if eerste else
+                            {"gem": cijfers["week"]["gemiddeld_cijfer"], "vorigeWeek": cijfers["week"]["vorige_week_gemiddeld"],
+                             "dagen": cijfers["week"]["dagen_ingevuld"]}),
+                "combinaties": alle["combinaties"][:3],
+                "patronen": cijfers["alle_tijd"]["patronen"][:8]}
         print(json.dumps(week, ensure_ascii=False, indent=2))
         if a.droog:
             continue

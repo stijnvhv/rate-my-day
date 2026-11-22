@@ -62,7 +62,7 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
   }
 }
 
-async function fetchDoc(code: string): Promise<Record<string, any> | null> {
+export async function fetchDoc(code: string): Promise<Record<string, any> | null> {
   const res = await fetch(`${BASE}/rmd/${code}?key=${API_KEY}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Ophalen mislukt (${res.status})`);
@@ -79,7 +79,7 @@ async function fetchDoc(code: string): Promise<Record<string, any> | null> {
   return out;
 }
 
-async function patchDoc(code: string, fields: Record<string, unknown>): Promise<void> {
+export async function patchDoc(code: string, fields: Record<string, unknown>): Promise<void> {
   const mask = Object.keys(fields).map((f) => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
   const body = { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, { stringValue: JSON.stringify(v) }])) };
   const res = await fetch(`${BASE}/rmd/${code}?key=${API_KEY}&${mask}`, {

@@ -46,3 +46,5 @@ dist/
 .expo/
 analyse/laatste-run.log
 analyse/uitsluiten.txt
+analyse/.venv/
+analyse/herinneringen.log

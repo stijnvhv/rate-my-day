@@ -1,0 +1,14 @@
+{
+  "name": "Rate My Day",
+  "short_name": "Rate My Day",
+  "start_url": "/rate-my-day/",
+  "scope": "/rate-my-day/",
+  "display": "standalone",
+  "background_color": "#F4F2FA",
+  "theme_color": "#6C4CF5",
+  "lang": "nl",
+  "icons": [
+    { "src": "/rate-my-day/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/rate-my-day/icon-512.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}

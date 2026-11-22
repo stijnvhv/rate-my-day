@@ -15,6 +15,7 @@ s=s.replace('</head>','''<meta name="theme-color" content="#6C4CF5" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Rate My Day" />
     <link rel="apple-touch-icon" href="/rate-my-day/apple-touch-icon.png" />
+    <link rel="manifest" href="/rate-my-day/manifest.json" />
     <style>body{background:#F4F2FA}</style>
   </head>''',1)
 open(p,'w').write(s)

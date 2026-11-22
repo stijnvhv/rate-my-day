@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { DEFAULT_SETTINGS, getSettings, saveSettings, Settings } from '../storage/settingsStorage';
+import { disablePush, enablePush, pushStatus, PushStatus, testPush } from '../notifications/webpush';
 import { getCode, lastSync, onSynced, setCode, syncNow, validCode } from '../storage/sync';
 import {
   cancelDailyReminder,
@@ -37,10 +38,13 @@ export default function SettingsScreen() {
   const [synced, setSynced] = useState<string | null>(null);
   const [newCode, setNewCode] = useState('');
   const [showCode, setShowCode] = useState(false);
+  const [push, setPush] = useState<PushStatus | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const loadSync = useCallback(async () => {
     setCodeState(await getCode());
     setSynced(await lastSync());
+    if (Platform.OS === 'web') setPush(await pushStatus().catch(() => 'niet-mogelijk' as PushStatus));
   }, []);
 
   useFocusEffect(
@@ -120,11 +124,60 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.heading}>Instellingen</Text>
 
+        {Platform.OS === 'web' ? (
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>🔔 Meldingen op je telefoon</Text>
+              <Text style={styles.rowSubtitle}>
+                {push === 'aan'
+                  ? 'Aan. Vanaf 08:30 elk kwartier een melding tot gisteren is ingevuld, en vanaf 17:00 tot je dagplanner voor morgen staat.'
+                  : push === 'beginscherm'
+                  ? 'Open Rate My Day vanaf je beginscherm (Safari → Deel → Zet op beginscherm). Alleen daar kan je iPhone meldingen geven.'
+                  : push === 'geweigerd'
+                  ? 'Meldingen zijn geweigerd. Zet ze aan via Instellingen → Meldingen → Rate My Day op je iPhone.'
+                  : push === 'niet-mogelijk'
+                  ? 'Deze browser ondersteunt geen meldingen.'
+                  : 'Zet aan om herinneringen te krijgen die blijven komen tot je hebt ingevuld.'}
+              </Text>
+              {push === 'aan' && (
+                <View style={styles.pushRow}>
+                  <TouchableOpacity onPress={() => testPush()}>
+                    <Text style={styles.linkText}>Testmelding</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={async () => { await disablePush(); loadSync(); }}>
+                    <Text style={[styles.linkText, { color: '#7A7592' }]}>Uitzetten</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            {(push === 'uit' || push === null) && (
+              <TouchableOpacity
+                style={styles.pushButton}
+                disabled={pushBusy}
+                onPress={async () => {
+                  setPushBusy(true);
+                  try {
+                    const st = await enablePush();
+                    setPush(st);
+                    if (st === 'aan') testPush();
+                  } catch (e) {
+                    notify('Lukt niet', String(e));
+                  } finally {
+                    setPushBusy(false);
+                  }
+                }}
+              >
+                <Text style={styles.pushButtonText}>{pushBusy ? '…' : 'Aanzetten'}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <>
         <View style={styles.row}>
           <View style={styles.rowText}>
             <Text style={styles.rowTitle}>Dagelijkse herinnering</Text>
             <Text style={styles.rowSubtitle}>
-              {Platform.OS === 'web'
+              {(Platform.OS as string) === 'web'
                 ? 'In de webversie komt de herinnering via Structured en je Mac, niet uit deze app.'
                 : 'Krijg elke dag een melding om je dag te beoordelen.'}
             </Text>
@@ -157,7 +210,7 @@ export default function SettingsScreen() {
                 }}
               />
             )}
-            {Platform.OS === 'web' && (
+            {(Platform.OS as string) === 'web' && (
               <View style={styles.webTimeRow}>
                 <TextInput
                   style={styles.webTimeInput}
@@ -185,10 +238,13 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {Platform.OS !== 'web' && (
+        {(Platform.OS as string) !== 'web' && (
         <TouchableOpacity style={styles.testButton} onPress={sendTestNotification}>
           <Text style={styles.testButtonText}>Stuur testmelding</Text>
         </TouchableOpacity>
+        )}
+
+          </>
         )}
 
         <Text style={styles.sectionHeading}>Online bewaard</Text>
@@ -382,6 +438,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
+  pushRow: { flexDirection: 'row', gap: 18, marginTop: 10 },
+  linkText: { color: '#6C4CF5', fontWeight: '700', fontSize: 14 },
+  pushButton: { backgroundColor: '#6C4CF5', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10 },
+  pushButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   codeText: { fontSize: 12, color: '#17142B', marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   codeInput: {
     borderWidth: 1,

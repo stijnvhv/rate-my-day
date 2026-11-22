@@ -13,3 +13,8 @@ Persoonlijke dag-rater van Stijn (Expo / React Native Web). Live: https://stijnv
 - Document `rmd/{koppelcode}` met velden `entries`, `challenge`, `inzichten` (JSON-tekst); subcollectie `gezondheid/{JJJJ-MM-DD}` (iPhone-opdracht: stappen, wandelminuten, workouts).
 - App: `src/storage/sync.ts` (REST, samenvoegen per dag op `updatedAt`; challenge op `_bijgewerkt`). Koppelcode staat alleen op het apparaat (Instellingen → Online bewaard).
 - Weekanalyse: `analyse/weekanalyse.py` (cijfers en patronen in code, Claude schrijft alleen de tekst), LaunchAgent `nl.stijn.ratemyday-weekanalyse` op de mini, zondag 19:00. Proef: `--droog`. Testcodes in `analyse/uitsluiten.txt`.
+
+## Pushmeldingen (sinds 22 nov 2026)
+- App: `public/sw.js` + `public/manifest.json`, `src/notifications/webpush.ts` (Instellingen → Meldingen aanzetten; alleen vanaf beginscherm op iPhone). Abonnementen in veld `push` van het document.
+- Mini: `analyse/herinneringen.py` (venv `analyse/.venv`, pywebpush), LaunchAgent `nl.stijn.ratemyday-herinneringen` elke 5 min. Vanaf 08:30 tot gisteren is ingevuld, vanaf 17:00 tot veld `planner[vandaag]` (kaart Dagplanner op Vandaag) staat; elk kwartier, stil na 23:00. VAPID-sleutels in `~/.config/ratemyday/`. Test: `.venv/bin/python herinneringen.py --test`.
+- Notitielabels: weekanalyse laat Claude (haiku) notities labelen (gedronken, gesport, …), bewaard in veld `notitieLabels`; code rekent. Totaalanalyse opnieuw: `weekanalyse.py --totaal`.

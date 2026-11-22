@@ -13,8 +13,17 @@ interface Patroon {
   nMet: number;
   nZonder: number;
 }
+interface Combi {
+  combinatie: string;
+  beide: number;
+  geen_van_beide: number;
+  nBeide: number;
+  nGeen: number;
+}
 interface Week {
   week: string;
+  soort?: 'week' | 'totaal';
+  combinaties?: Combi[];
   van: string;
   tot: string;
   gemaakt: string;
@@ -32,7 +41,7 @@ const kort = (k: string) => {
   return new Date(y, m - 1, d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
 };
 
-function PatroonBalk({ p }: { p: Patroon }) {
+function PatroonBalk({ p, labels = ['wel', 'niet'] }: { p: Patroon; labels?: [string, string] | string[] }) {
   const verschil = p.met - p.zonder;
   return (
     <View style={styles.pat}>
@@ -44,8 +53,8 @@ function PatroonBalk({ p }: { p: Patroon }) {
         </Text>
       </View>
       {[
-        { t: 'wel', v: p.met, n: p.nMet },
-        { t: 'niet', v: p.zonder, n: p.nZonder },
+        { t: labels[0], v: p.met, n: p.nMet },
+        { t: labels[1], v: p.zonder, n: p.nZonder },
       ].map((r) => (
         <View key={r.t} style={styles.patRow}>
           <Text style={styles.patSide}>{r.t}</Text>
@@ -68,7 +77,9 @@ function WeekKaart({ w }: { w: Week }) {
       <LinearGradient colors={HERO} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={styles.heroSmall}>
-            Week {w.week.split('-W')[1]} · {kort(w.van)} t/m {kort(w.tot)}
+            {w.soort === 'totaal'
+              ? `Totaalbeeld · ${kort(w.van)} t/m ${kort(w.tot)} · ${w.cijfers.dagen} dagen`
+              : `Week ${w.week.split('-W')[1]} · ${kort(w.van)} t/m ${kort(w.tot)}`}
           </Text>
           <Text style={styles.heroTitle}>{w.kop}</Text>
         </View>
@@ -91,10 +102,24 @@ function WeekKaart({ w }: { w: Week }) {
 
       {w.patronen.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>📊 Gemiddeld dagcijfer: wel of niet</Text>
-          <Text style={styles.cardHint}>Over al je ingevulde dagen; alleen patronen met genoeg dagen aan beide kanten.</Text>
+          <Text style={styles.cardTitle}>📊 Je dagcijfer: wel of niet</Text>
+          <Text style={styles.cardHint}>Over al je dagen sinds het begin. 'Volgens notitie' = stond in je dagnotitie (benadering).</Text>
           {w.patronen.map((p) => (
             <PatroonBalk key={p.label} p={p} />
+          ))}
+        </View>
+      )}
+
+      {w.combinaties && w.combinaties.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>🔗 Combinaties</Text>
+          <Text style={styles.cardHint}>Twee dingen samen tegenover geen van beide.</Text>
+          {w.combinaties.map((c) => (
+            <PatroonBalk
+              key={c.combinatie}
+              p={{ label: c.combinatie, met: c.beide, zonder: c.geen_van_beide, nMet: c.nBeide, nZonder: c.nGeen }}
+              labels={['beide', 'geen']}
+            />
           ))}
         </View>
       )}
@@ -170,7 +195,7 @@ export default function InsightsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>
-                    Week {w.week.split('-W')[1]} · {kort(w.van)}
+                    {w.soort === 'totaal' ? `Totaalbeeld t/m ${kort(w.tot)}` : `Week ${w.week.split('-W')[1]} · ${kort(w.van)}`}
                   </Text>
                   <Text style={styles.rowSub} numberOfLines={1}>
                     {w.kop}
@@ -220,7 +245,7 @@ const styles = StyleSheet.create({
   patLabel: { fontSize: 14, fontWeight: '700', color: C.ink, flex: 1 },
   patDelta: { fontSize: 14, fontWeight: '800' },
   patRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  patSide: { width: 34, fontSize: 12, color: C.muted },
+  patSide: { width: 42, fontSize: 12, color: C.muted },
   patTrack: { flex: 1, height: 12, borderRadius: 6, backgroundColor: '#F2EFFA', overflow: 'hidden' },
   patFill: { height: 12, borderRadius: 6 },
   patVal: { width: 70, textAlign: 'right', fontSize: 13, fontWeight: '700', color: C.ink },
