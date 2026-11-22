@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5B3DF0"/><stop offset=".55" stop-color="#E9579E"/><stop offset="1" stop-color="#FF9A5A"/></linearGradient>
+ <radialGradient id="sun" cx=".5" cy=".4" r=".6"><stop offset="0" stop-color="#FFF4B8"/><stop offset=".6" stop-color="#FFC93C"/><stop offset="1" stop-color="#FF9F1C"/></radialGradient>
+ <filter id="sh"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#5A1340" flood-opacity=".35"/></filter>
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<g stroke="#FFE08A" stroke-width="34" stroke-linecap="round" opacity=".9">
+ <line x1="512" y1="150" x2="512" y2="230"/><line x1="268" y1="250" x2="318" y2="306"/><line x1="756" y1="250" x2="706" y2="306"/>
+ <line x1="160" y1="470" x2="236" y2="482"/><line x1="864" y1="470" x2="788" y2="482"/>
+</g>
+<g filter="url(#sh)"><circle cx="512" cy="560" r="250" fill="url(#sun)"/></g>
+<circle cx="432" cy="520" r="26" fill="#5A2A00"/><circle cx="592" cy="520" r="26" fill="#5A2A00"/>
+<path d="M 412 610 Q 512 700 612 610" fill="none" stroke="#5A2A00" stroke-width="30" stroke-linecap="round"/>
+<path d="M 0 860 Q 512 780 1024 860 L 1024 1024 L 0 1024 Z" fill="#3B1FA8" opacity=".55"/>
+</svg>
