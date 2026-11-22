@@ -50,7 +50,9 @@ async function loadChallenge() {
   }
 }
 async function saveChallenge(c) {
+  c._bijgewerkt = new Date().toISOString();
   await AsyncStorage.setItem(KEY, JSON.stringify(c));
+  if (globalThis.__rmdSyncSoon) globalThis.__rmdSyncSoon();
 }
 
 // ---------------------------------------------------------------------------

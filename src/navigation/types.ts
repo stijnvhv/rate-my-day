@@ -1,6 +1,7 @@
 export type TabParamList = {
   Today: undefined;
   History: undefined;
+  Insights: undefined;
   Settings: undefined;
 };
 

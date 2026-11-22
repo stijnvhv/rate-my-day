@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Eén document per koppelcode (≥ 40 tekens, alleen bekend op Stijns telefoon). Opvragen van alle codes kan niet.
+    match /rmd/{code} {
+      allow get, create, update: if code.size() >= 40 && code.size() <= 80;
+      // Gezondheidsdata per dag (iPhone-opdracht schrijft hier).
+      match /gezondheid/{dag} {
+        allow list: if code.size() >= 40 && code.size() <= 80;
+        allow get, create, update: if code.size() >= 40 && code.size() <= 80 && dag.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      }
+    }
+  }
+}

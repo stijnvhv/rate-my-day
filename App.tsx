@@ -4,10 +4,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import RootNavigator from './src/navigation/RootNavigator';
 import { getSettings } from './src/storage/settingsStorage';
+import { startAutoSync } from './src/storage/sync';
 import { requestNotificationPermission, scheduleDailyReminder } from './src/notifications/notifications';
 
 export default function App() {
   useEffect(() => {
+    startAutoSync();
     (async () => {
       const settings = await getSettings();
       if (settings.reminderEnabled) {

@@ -14,7 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import NumberPicker from './NumberPicker';
 import MoodPicker from './MoodPicker';
 import FormSection from './FormSection';
-import { DayEntry, Mood } from '../types/entry';
+import { Alcohol, ALCOHOL_LABEL, DayEntry, Mood } from '../types/entry';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CHALLENGE_KEY, HEALTH_KEY, onSynced } from '../storage/sync';
 import { calculateStreak, getAllEntries, getEntry, saveEntry } from '../storage/entriesStorage';
 import { formatDateNL, toDateKey, todayKey } from '../utils/date';
 import { C, HERO, scaleColor } from '../theme';
@@ -55,6 +57,11 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
   const [exerciseScore, setExerciseScore] = useState<number | null>(null);
   const [productivity, setProductivity] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [alcohol, setAlcohol] = useState<Alcohol | null>(null);
+  const [walked, setWalked] = useState<boolean | null>(null);
+  const [social, setSocial] = useState<boolean | null>(null);
+  const [steps, setSteps] = useState<number | null>(null);
+  const touched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [existing, setExisting] = useState<DayEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +85,9 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
       setExerciseScore(entry.exerciseScore);
       setProductivity(entry.productivity);
       setNote(entry.note);
+      setAlcohol(entry.alcohol ?? null);
+      setWalked(entry.walked ?? null);
+      setSocial(entry.social ?? null);
     } else {
       setExisting(null);
       setScore(null);
@@ -87,6 +97,20 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
       setExerciseScore(null);
       setProductivity(null);
       setNote('');
+      // Uit de 90-dagen challenge overnemen wat daar al is ingevuld.
+      let ch: any = null;
+      try { ch = JSON.parse((await AsyncStorage.getItem(CHALLENGE_KEY)) || 'null'); } catch {}
+      const rec = ch?.days?.[date];
+      setAlcohol(rec?.alcohol === true ? 'some' : rec?.alcohol === false ? 'none' : null);
+      setWalked(null);
+      setSocial(null);
+    }
+    touched.current = false;
+    try {
+      const health = JSON.parse((await AsyncStorage.getItem(HEALTH_KEY)) || '{}');
+      setSteps(typeof health?.[date]?.stappen === 'number' ? health[date].stappen : null);
+    } catch {
+      setSteps(null);
     }
     await loadStats();
   }, [date, hero]);
@@ -102,6 +126,11 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
   useFocusEffect(
     useCallback(() => {
       load();
+      // Na synchronisatie verversen, maar niet als je net aan het invullen bent.
+      return onSynced(() => {
+        if (!touched.current) load();
+        else loadStats();
+      });
     }, [load])
   );
 
@@ -112,7 +141,7 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
     setSleepHours(String(next).replace('.', ','));
   };
 
-  const filledCount = [score, mood, energy, isNaN(parsedSleep) ? null : 1, exerciseScore, productivity].filter(
+  const filledCount = [score, mood, energy, isNaN(parsedSleep) ? null : 1, exerciseScore, productivity, alcohol].filter(
     (v) => v !== null
   ).length;
 
@@ -129,6 +158,7 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
       return fail('Vul een geldig aantal slaapuren in (0 tot 24).');
     if (exerciseScore === null) return fail('Geef een cijfer voor sport.');
     if (productivity === null) return fail('Kies je productiviteit.');
+    if (alcohol === null) return fail('Geef aan of je hebt gedronken.');
 
     setError(null);
     setSaving(true);
@@ -142,6 +172,9 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
         exerciseScore,
         productivity,
         note: note.trim(),
+        alcohol,
+        ...(walked !== null ? { walked } : {}),
+        ...(social !== null ? { social } : {}),
       });
       setExisting(entry);
       setSaved(true);
@@ -160,7 +193,7 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" onTouchStart={() => { touched.current = true; }}>
         <View style={styles.inner}>
           <LinearGradient colors={HERO} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, !hero && styles.heroSmall]}>
             <View style={styles.heroText}>
@@ -170,7 +203,7 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
               <View style={styles.chips}>
                 {hero && streak > 0 && <Text style={styles.chip}>🔥 {streak} {streak === 1 ? 'dag' : 'dagen'} op rij</Text>}
                 {existing && <Text style={styles.chip}>✓ Ingevuld</Text>}
-                {!existing && <Text style={styles.chip}>{filledCount}/6 ingevuld</Text>}
+                {!existing && <Text style={styles.chip}>{filledCount}/7 ingevuld</Text>}
               </View>
             </View>
             <View style={[styles.bigScore, { backgroundColor: scoreTint }]}>
@@ -229,6 +262,32 @@ export default function DayEntryForm({ date: dateProp, onSaved, top, hero }: Day
 
           <FormSection emoji="📈" title="Productiviteit" hint="werk of studie">
             <NumberPicker min={1} max={5} value={productivity} onChange={setProductivity} activeColor={C.green} lowLabel="Weinig gedaan" highLabel="Super productief" />
+          </FormSection>
+
+          <FormSection emoji="🍷" title="Gedronken?" hint="alcohol">
+            <View style={styles.chipRow}>
+              {(['none', 'some', 'much'] as Alcohol[]).map((a) => (
+                <TouchableOpacity
+                  key={a}
+                  activeOpacity={0.85}
+                  style={[styles.opt, alcohol === a && (a === 'none' ? styles.optGood : styles.optWarn)]}
+                  onPress={() => { setAlcohol(a); setError(null); }}
+                >
+                  <Text style={[styles.optText, alcohol === a && styles.optTextOn]}>{ALCOHOL_LABEL[a]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </FormSection>
+
+          <FormSection emoji="🚶" title="Ook gedaan vandaag" hint={steps !== null ? `👟 ${steps.toLocaleString('nl-NL')} stappen (iPhone)` : 'tik aan wat klopt'}>
+            <View style={styles.chipRow}>
+              <TouchableOpacity activeOpacity={0.85} style={[styles.opt, walked === true && styles.optGood]} onPress={() => setWalked(walked === true ? false : true)}>
+                <Text style={[styles.optText, walked === true && styles.optTextOn]}>🚶 Gewandeld</Text>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.85} style={[styles.opt, social === true && styles.optGood]} onPress={() => setSocial(social === true ? false : true)}>
+                <Text style={[styles.optText, social === true && styles.optTextOn]}>👥 Mensen gezien</Text>
+              </TouchableOpacity>
+            </View>
           </FormSection>
 
           <FormSection emoji="📝" title="Notitie" hint="optioneel">
@@ -352,6 +411,22 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
+  chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  opt: {
+    flexGrow: 1,
+    flexBasis: 90,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    backgroundColor: '#FAF9FE',
+    alignItems: 'center',
+  },
+  optGood: { backgroundColor: C.green, borderColor: C.green },
+  optWarn: { backgroundColor: C.amber, borderColor: C.amber },
+  optText: { fontSize: 15, fontWeight: '700', color: C.text, textAlign: 'center' },
+  optTextOn: { color: '#FFFFFF' },
   footer: {
     position: 'absolute',
     left: 0,

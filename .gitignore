@@ -44,3 +44,5 @@ node_modules/
 dist/
 *.log
 .expo/
+analyse/laatste-run.log
+analyse/uitsluiten.txt

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DayEntry } from '../types/entry';
 import { toDateKey } from '../utils/date';
+import { syncSoon } from './sync';
 
 const ENTRIES_KEY = 'rate-my-day:entries';
 
@@ -13,6 +14,7 @@ async function readAll(): Promise<EntriesMap> {
 
 async function writeAll(entries: EntriesMap): Promise<void> {
   await AsyncStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+  syncSoon();
 }
 
 export async function getAllEntries(): Promise<DayEntry[]> {

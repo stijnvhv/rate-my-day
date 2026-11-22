@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import TodayScreen from '../screens/TodayScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import { TabParamList } from './types';
 import { C } from '../theme';
 
@@ -37,6 +38,11 @@ export default function TabNavigator() {
         name="History"
         component={HistoryScreen}
         options={{ title: 'Overzicht', tabBarIcon: ({ focused }) => <Icon emoji="📊" focused={focused} /> }}
+      />
+      <Tab.Screen
+        name="Insights"
+        component={InsightsScreen}
+        options={{ title: 'Inzichten', tabBarIcon: ({ focused }) => <Icon emoji="💡" focused={focused} /> }}
       />
       <Tab.Screen
         name="Settings"

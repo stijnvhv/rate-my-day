@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { DEFAULT_SETTINGS, getSettings, saveSettings, Settings } from '../storage/settingsStorage';
+import { getCode, lastSync, onSynced, setCode, syncNow, validCode } from '../storage/sync';
 import {
   cancelDailyReminder,
   requestNotificationPermission,
@@ -32,11 +33,22 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [exportJson, setExportJson] = useState<string | null>(null);
   const [importText, setImportText] = useState('');
+  const [code, setCodeState] = useState('');
+  const [synced, setSynced] = useState<string | null>(null);
+  const [newCode, setNewCode] = useState('');
+  const [showCode, setShowCode] = useState(false);
+
+  const loadSync = useCallback(async () => {
+    setCodeState(await getCode());
+    setSynced(await lastSync());
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       getSettings().then(setSettings);
-    }, [])
+      loadSync();
+      return onSynced(loadSync);
+    }, [loadSync])
   );
 
   const applyReminder = async (next: Settings) => {
@@ -105,7 +117,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.flex}>
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.heading}>Instellingen</Text>
 
         <View style={styles.row}>
@@ -179,6 +191,47 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         )}
 
+        <Text style={styles.sectionHeading}>Online bewaard</Text>
+        <View style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>{synced ? '☁️ Gesynchroniseerd' : '⏳ Nog niet gesynchroniseerd'}</Text>
+            <Text style={styles.rowSubtitle}>
+              {synced
+                ? `Laatst: ${new Date(synced).toLocaleString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Je dagen en challenge staan veilig online, voor de weekanalyse.`
+                : 'Je dagen worden online bewaard zodra er verbinding is.'}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.timeButton} onPress={() => syncNow()}>
+            <Text style={styles.timeButtonText}>Nu</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity onPress={() => setShowCode(!showCode)}>
+          <Text style={styles.importLabel}>{showCode ? 'Verberg koppelcode' : 'Koppelcode tonen of ander apparaat koppelen ›'}</Text>
+        </TouchableOpacity>
+        {showCode && (
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowSubtitle}>Jouw koppelcode (geheim houden):</Text>
+              <Text selectable style={styles.codeText}>{code}</Text>
+              <Text style={[styles.rowSubtitle, { marginTop: 10 }]}>Code van een ander apparaat plakken om dit apparaat daaraan te koppelen:</Text>
+              <TextInput style={styles.codeInput} value={newCode} onChangeText={setNewCode} autoCapitalize="none" placeholder="koppelcode" placeholderTextColor="#B9B4CC" />
+              {newCode.length > 0 && (
+                <TouchableOpacity
+                  style={styles.importButton}
+                  onPress={async () => {
+                    if (!validCode(newCode)) return notify('Ongeldige code', 'Plak de volledige koppelcode.');
+                    await setCode(newCode);
+                    setNewCode('');
+                    notify('Gekoppeld', 'Dit apparaat gebruikt nu dezelfde online gegevens; je lokale dagen zijn samengevoegd.');
+                  }}
+                >
+                  <Text style={styles.importButtonText}>Koppelen</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         <Text style={styles.sectionHeading}>Data overzetten</Text>
 
         <TouchableOpacity style={styles.transferButton} onPress={handleExport}>
@@ -199,7 +252,7 @@ export default function SettingsScreen() {
             <Text style={styles.importButtonText}>Importeer</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </ScrollView>
 
       {exportJson !== null && (
         <Modal animationType="slide" onRequestClose={() => setExportJson(null)}>
@@ -328,6 +381,17 @@ const styles = StyleSheet.create({
     color: '#3B3755',
     fontWeight: '600',
     fontSize: 15,
+  },
+  codeText: { fontSize: 12, color: '#17142B', marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  codeInput: {
+    borderWidth: 1,
+    borderColor: '#ECE8F7',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    marginTop: 6,
+    color: '#17142B',
+    backgroundColor: '#FFFFFF',
   },
   importLabel: {
     fontSize: 13,
